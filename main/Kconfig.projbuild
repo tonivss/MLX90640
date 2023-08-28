@@ -1,0 +1,90 @@
+menu "MLX90640 Configuration"
+    
+    config SDA_PIN
+        int "SDA Pin"
+        default 21
+        help
+            SDA Pin the MLX90640 is connected to.
+
+    config SCL_PIN
+        int "SCL Pin"
+        default 22
+        help
+            SCL Pin the MLX90640 is connected to.
+
+    config MLX90640_I2C_ADDRESS
+        hex "MLX90640 I2C Address"
+        default 0x33
+        help
+            MLX90640 I2C Address.
+
+    choice 
+        bool "Choose MLX90640 refresh rate"
+        default MLX90640_REFRESH_RATE_1HZ
+        help
+            Select resfreh rate.
+
+        config MLX90640_REFRESH_RATE_0_5HZ
+            bool "MLX90640_REFRESH_RATE_0_5HZ"
+        config MLX90640_REFRESH_RATE_1HZ
+            bool "MLX90640_REFRESH_RATE_1HZ"
+        config MLX90640_REFRESH_RATE_2HZ
+            bool "MLX90640_REFRESH_RATE_2HZ"
+        config MLX90640_REFRESH_RATE_4HZ
+            bool "MLX90640_REFRESH_RATE_4HZ"
+        config MLX90640_REFRESH_RATE_8HZ
+            bool "MLX90640_REFRESH_RATE_8HZ"
+        config MLX90640_REFRESH_RATE_16HZ
+            bool "MLX90640_REFRESH_RATE_16HZ"
+        config MLX90640_REFRESH_RATE_32HZ
+            bool "MLX90640_REFRESH_RATE_32HZ"
+        config MLX90640_REFRESH_RATE_64HZ
+            bool "MLX90640_REFRESH_RATE_64HZ"
+    endchoice
+
+    config MLX90640_REFRESH_RATE
+        hex
+        default 0x00 if MLX90640_REFRESH_RATE_0_5HZ
+        default 0x01 if MLX90640_REFRESH_RATE_1HZ
+        default 0x02 if MLX90640_REFRESH_RATE_2HZ
+        default 0x03 if MLX90640_REFRESH_RATE_4HZ
+        default 0x04 if MLX90640_REFRESH_RATE_8HZ
+        default 0x05 if MLX90640_REFRESH_RATE_16HZ
+        default 0x06 if MLX90640_REFRESH_RATE_32HZ
+        default 0x07 if MLX90640_REFRESH_RATE_64HZ
+        help
+            MLX90640 refresh rate.
+        
+    choice
+        bool "Choose MLX90640 resolution"
+        default MLX90640_RESOLUTION_16BIT
+        help
+            Select resolution.
+
+        config MLX90640_RESOLUTION_16BIT
+            bool "MLX90640_RESOLUTION_16BIT"
+        config MLX90640_RESOLUTION_17BIT
+            bool "MLX90640_RESOLUTION_17BIT"
+        config MLX90640_RESOLUTION_18BIT
+            bool "MLX90640_RESOLUTION_18BIT"
+        config MLX90640_RESOLUTION_19BIT
+            bool "MLX90640_RESOLUTION_19BIT"
+    endchoice
+
+    config MLX90640_RESOLUTION
+        hex
+        default 0x00 if MLX90640_RESOLUTION_16BIT
+        default 0x01 if MLX90640_RESOLUTION_17BIT
+        default 0x02 if MLX90640_RESOLUTION_18BIT
+        default 0x03 if MLX90640_RESOLUTION_19BIT
+        help
+            MLX90640 resolution.
+
+    config MLX90640_INTERLEAVE_MODE
+        int "Set MLX90640 interleave mode"
+        default 0
+        range 0 1
+        help
+            Select interleave mode. By default, the MLX90640 is set to chess mode.
+
+endmenu
