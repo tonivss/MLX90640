@@ -1,32 +1,16 @@
-# _Sample project_
+# MLX90640 Driver
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+This is a driver for the MLX90640 thermal camera. It is based on the driver provided by [Melexis](https://www.melexis.com/en/product/MLX90640/Far-Infrared-Thermal-Sensor-Array) and the implementation [REDar](https://github.com/linkineo/REDar) to the ESP32 by [Patrick Wieder](https://github.com/linkineo).
 
-This is the simplest buildable example. The example is used by command `idf.py create-project`
-that copies the project to user specified path and set it's name. For more information follow the [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project)
+## How to Run
 
+1\. Connect the MLX90640 sensor to your ESP device using serial data (SDA) and serial clock (SCL).\
+2\. Open `menuconfig` and configure I2C pins and the I2C address of the sensor. Also you can configure refresh rate, resolution and if you wish to enable interleave mode or use the default chess mode.\
+2\. Compile and flash the code to your ESP device.\
+3\. Once the device boots up, it will initialize the sensor, capture a thermal frame, and display the pixel temperatures on the console.
 
+## License
+This example code is in the Public Domain (or CC0 licensed, at your option.) It is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 
-## How to use example
-We encourage the users to use the example as a template for the new projects.
-A recommended way is to follow the instructions on a [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project).
-
-## Example folder contents
-
-The project **sample_project** contains one source file in C language [main.c](main/main.c). The file is located in folder [main](main).
-
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt`
-files that provide set of directives and instructions describing the project's source files and targets
-(executable, library, or both). 
-
-Below is short explanation of remaining files in the project folder.
-
-```
-├── CMakeLists.txt
-├── main
-│   ├── CMakeLists.txt
-│   └── main.c
-└── README.md                  This is the file you are currently reading
-```
-Additionally, the sample project contains Makefile and component.mk files, used for the legacy Make based build system. 
-They are not used or needed when building with CMake and idf.py.
+## Acknowledgements
+Thanks to Melexis for providing the MLX90640 sensor specifications and I2C protocol details. Also thanks to Patrick Wieder for providing the example implementation to the ESP32.
