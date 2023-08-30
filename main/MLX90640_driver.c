@@ -34,6 +34,9 @@ static float mlx90640Image[768];                        // Array holding the ima
 uint8_t mlx90640To_grayscale[768];                      // Calculated temperatures of all pixels [°C] in grayscale
 uint16_t num_pixels = 768;                                       // Number of pixels in MLX90640
 static uint16_t eeMLX90640[832];                        // EEPROM data of the MLX90640
+static float mlx90640To[768];
+#define TA_SHIFT 8 //Default shift for MLX90640 in open air
+float emissivity = 0.95;
 const char *MLX90640_TAG = "MLX90640";                  /*!< Tag name of the module */
 
 
@@ -91,27 +94,34 @@ bool MLX90640_isConnected()
  */
 void MLX90640_config()
 {
-    int status;
-    status = MLX90640_SetResolution(CONFIG_MLX90640_I2C_ADDRESS, CONFIG_MLX90640_RESOLUTION);
-    ESP_LOGI(MLX90640_TAG, "Current MLX90640 Resolution: %d", status);
-
-    int curResolution;
-    curResolution = MLX90640_GetCurResolution(CONFIG_MLX90640_I2C_ADDRESS); //curResolution = 0x03(19-bit) as this is the actual resolution the device is working with
-    ESP_LOGI(MLX90640_TAG, "Current MLX90640 Resolution: %d", curResolution);
-    MLX90640_SetRefreshRate(CONFIG_MLX90640_I2C_ADDRESS, CONFIG_MLX90640_REFRESH_RATE);
-    int curRR;
-    curRR = MLX90640_GetRefreshRate(CONFIG_MLX90640_I2C_ADDRESS); // curRR = 0x05(16Hz) as this is the actual refresh rate the device is working with
-    ESP_LOGI(MLX90640_TAG, "Current MLX90640 ResfreshRate: %d", curRR);
+    // Set the MLX90640 resolution    
+    if (MLX90640_SetResolution(CONFIG_MLX90640_I2C_ADDRESS, CONFIG_MLX90640_RESOLUTION) == ESP_OK) {
+        int curResolution = MLX90640_GetCurResolution(CONFIG_MLX90640_I2C_ADDRESS); //curResolution = 0x03(19-bit) as this is the actual resolution the device is working with
+        ESP_LOGI(MLX90640_TAG, "Current MLX90640 Resolution: %d", curResolution);
+    } else {
+        ESP_LOGE(MLX90640_TAG, "Error setting MLX90640 resolution!");
+    }
+    
+    // Set the MLX90640 refresh rate
+    if (MLX90640_SetRefreshRate(CONFIG_MLX90640_I2C_ADDRESS, CONFIG_MLX90640_REFRESH_RATE) == ESP_OK) {
+        int curRR = MLX90640_GetRefreshRate(CONFIG_MLX90640_I2C_ADDRESS); // curRR = 0x05(16Hz) as this is the actual refresh rate the device is working with
+        ESP_LOGI(MLX90640_TAG, "Current MLX90640 ResfreshRate: %d", curRR);
+    } else {
+        ESP_LOGE(MLX90640_TAG, "Error setting MLX90640 refresh rate!");
+    }
+    
+    // Set the MLX90640 to interleaved mode or chess pattern mode
     if (CONFIG_MLX90640_INTERLEAVE_MODE)
         MLX90640_SetInterleavedMode(CONFIG_MLX90640_I2C_ADDRESS);
     else
         MLX90640_SetChessMode(CONFIG_MLX90640_I2C_ADDRESS);
-    int mode;
-    mode = MLX90640_GetCurMode(CONFIG_MLX90640_I2C_ADDRESS); // mode = 0 if interleaved mode is set; mode = 1 if chess pattern mode is set
+    int mode = MLX90640_GetCurMode(CONFIG_MLX90640_I2C_ADDRESS); // mode = 0 if interleaved mode is set; mode = 1 if chess pattern mode is set
     ESP_LOGI(MLX90640_TAG, "Current MLX90640 mode (0:interleaved | 1:chess pattern): %d", mode);
+
+    // Extract the MLX90640 parameters
     MLX90640_DumpEE(CONFIG_MLX90640_I2C_ADDRESS, eeMLX90640);
     MLX90640_ExtractParameters(eeMLX90640, &mlx90640);
-    ESP_LOGI(MLX90640_TAG, "MLX90640 Extracted Parameters");
+    ESP_LOGI(MLX90640_TAG, "MLX90640 Extracted Parameters. MLX90640 configuration done!");
 }
 
 int MLX90640_I2CRead(uint8_t slaveAddr, uint16_t startAddress, uint16_t nMemAddressRead, uint16_t *data)
@@ -204,6 +214,30 @@ int MLX90640_I2CWrite(uint8_t slaveAddr, uint16_t writeAddress, uint16_t data)
     return 0;
 }
 
+/**
+ * @brief Perform I2C Reset
+ */
+int MLX90640_I2CGeneralReset()
+{
+    uint8_t sa = (0x00 << 1);
+    uint8_t resetCommand = 0x06; // Reset command
+
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, sa | I2C_MASTER_WRITE, ACK_CHECK_EN);
+    i2c_master_write_byte(cmd, resetCommand, ACK_CHECK_EN);
+    i2c_master_stop(cmd);
+
+    esp_err_t ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+    i2c_cmd_link_delete(cmd);
+
+    if (ret == ESP_OK) {
+        return 0; // Communication successful
+    } else {
+        return -1; // NAK occurred
+    }
+}
+
 char *convertGrayscaleArrayToString(uint8_t *grayscaleArray, int len) {
     // For each grayscale value, we assume a maximum of 4 characters (e.g., "255,")
     int max_length = len * 4 + 1; // +1 for the terminating null byte
@@ -280,17 +314,32 @@ static esp_err_t mlx90640_init() {
 
 static esp_err_t mlx90640_read(void *data) {
 
-    
-    // method 1:
-    int status;
-    status = MLX90640_SynchFrame(CONFIG_MLX90640_I2C_ADDRESS); 
-    ESP_LOGI(MLX90640_TAG, "MLX90640_SyncFrame status: %d", status);
+    int status = MLX90640_TriggerMeasurement(CONFIG_MLX90640_I2C_ADDRESS);
+    ESP_LOGW(MLX90640_TAG, "MLX90640_TriggerMeasurement status: %d", status);
     status = MLX90640_GetFrameData(CONFIG_MLX90640_I2C_ADDRESS, mlx90640Frame);
+    ESP_LOGW(MLX90640_TAG, "MLX90640_GetFrameData status: %d", status);
+    float tr = MLX90640_GetTa(mlx90640Frame, &mlx90640) - TA_SHIFT;
+    MLX90640_CalculateTo(mlx90640Frame, &mlx90640, emissivity, tr, mlx90640To);
+    status = MLX90640_GetFrameData(CONFIG_MLX90640_I2C_ADDRESS, mlx90640Frame);
+    ESP_LOGW(MLX90640_TAG, "MLX90640_GetFrameData status: %d", status);
+    tr = MLX90640_GetTa(mlx90640Frame, &mlx90640) - TA_SHIFT;
+    MLX90640_CalculateTo(mlx90640Frame, &mlx90640, emissivity, tr, mlx90640To);
+
+    mm min_max_temp = minmax(mlx90640To, sizeof(mlx90640To) / sizeof(mlx90640To[0]));
+    temperatureToGrayscale(mlx90640To, num_pixels, min_max_temp.min-10, min_max_temp.max+10, mlx90640To_grayscale);
+    for (int i = 0; i < 768; i++) {
+        ESP_LOGI(MLX90640_TAG,"mlx90640To: %0.2f", mlx90640To[i]);
+    }
+    
+    /* // method 1:
+    int status = MLX90640_SynchFrame(CONFIG_MLX90640_I2C_ADDRESS); 
+    ESP_LOGI(MLX90640_TAG, "MLX90640_SyncFrame status: %d", status);
+    MLX90640_GetFrameData(CONFIG_MLX90640_I2C_ADDRESS, mlx90640Frame);
     //ESP_LOGI(MLX90640_TAG, "MLX90640_GetFrameData status: %d", status);
-    MLX90640_GetImage(mlx90640Frame, &mlx90640, mlx90640Image);
+    MLX90640_GetImage(mlx90640Frame, &mlx90640, mlx90640Image); 
 
     mm min_max_temp = minmax(mlx90640Image, sizeof(mlx90640Image) / sizeof(mlx90640Image[0]));
-    temperatureToGrayscale(mlx90640Image, num_pixels, min_max_temp.min-10, min_max_temp.max+10, mlx90640To_grayscale);
+    temperatureToGrayscale(mlx90640Image, num_pixels, min_max_temp.min-10, min_max_temp.max+10, mlx90640To_grayscale);*/
 
     int len = sizeof(mlx90640To_grayscale) / sizeof(mlx90640To_grayscale[0]);
     char *payload = convertGrayscaleArrayToString(mlx90640To_grayscale, len);
@@ -305,21 +354,13 @@ static esp_err_t mlx90640_read(void *data) {
 }
 
 char* get_mlx_mqtt_topic(void) {
-    char* topic = malloc(MAX_TOPIC_LENGTH);  // Make sure you allocate enough space.
-    
-    // Let's say the sensor has a function to get its active channel:
-    int active_channel = 1;//get_active_channel();
-    
-    // Now build the topic dynamically.
-    snprintf(topic, MAX_TOPIC_LENGTH, "mesh/sensors/multi_channel/%d/data", active_channel);
-
-    return topic;  // Remember, whoever calls this function will be responsible for freeing the allocated memory.
+    return MLX90640_MQTT_TOPIC;
 }
 
 // Sample function to get MQTT payload for a sensor
 char* get_mqtt_payload(const void *data) {
-    // Cast the data to the expected type. For this example, I'm assuming it's an integer.
-    int sensor_value = *((int*)data);
+    // Cast the data to the expected type.
+    uint8_t* sensor_values = (uint8_t*)data;
 
     // Create a cJSON object
     cJSON *json_data = cJSON_CreateObject();
@@ -327,8 +368,20 @@ char* get_mqtt_payload(const void *data) {
         return NULL;
     }
 
-    // Add the sensor value to the JSON object
-    cJSON_AddNumberToObject(json_data, "value", sensor_value);
+    // Create a cJSON array
+    cJSON *json_array = cJSON_CreateArray();
+    if (json_array == NULL) {
+        cJSON_Delete(json_data);
+        return NULL;
+    }
+
+    // Add the sensor values to the cJSON array
+    for (int i = 0; i < 768; i++) {
+        cJSON_AddItemToArray(json_array, cJSON_CreateNumber(sensor_values[i]));
+    }
+
+    // Add the array to the JSON object
+    cJSON_AddItemToObject(json_data, "values", json_array);
 
     // Convert the cJSON object to a string
     char *json_string = cJSON_Print(json_data);

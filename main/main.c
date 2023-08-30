@@ -21,18 +21,18 @@ void app_main(void)
 
     mlx90640_data_t mlx_data;
 
-    while(true) {
+    //while(true) {
         // Read from MLX90640.
     if (mlx90640_api.read(&mlx_data) != ESP_OK) {
         ESP_LOGE(MLX90640_TAG, "Failed to read from DHT22!");
     } else {
         ESP_LOGI(MLX90640_TAG, "Read succsessful!");
-        for (int i = 0; i < 768; i++) {
+        /* for (int i = 0; i < 768; i++) {
             ESP_LOGI(MLX90640_TAG,"Grayscale value: %d", mlx_data.grayscale_val_array[i]);
-        }
+        } */
     }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
+/*         vTaskDelay(1000 / portTICK_PERIOD_MS);
+    } */
     
 
 }
